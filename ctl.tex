@@ -163,12 +163,51 @@ malware to verify that our system can identify malicious behaviors precisely.
 \end{itemize}
 
 The paper is structured as follows: We first provide some background knowledge of
-Android framework and illustrate our technique by a simple example in Section~\ref{sec:overview}
+Android framework and illustrate our technique by a simple example in Section~\ref{sec:overview}.
+Secondly we formalize the definition of TICCG in Section~\ref{sec:ticcg} and 
+the algorithm to construct it in Section~\ref{sec:construct}. Third, 
+we describe some details about our refinement with CEGAR in Section~\ref{sec:cegar}, 
+followed by our preliminary evaluation in Section~\ref{sec:eval}.
+Finally we conclude our work in Section~\ref{sec:conclude}.
 
 \section{Background and Overview}
 \label{sec:overview}
+In this section, we will first introduce some basic knowledge of Android framework 
+and then illustrate our approach using a simplified version of a malcious application.
 
 \subsection{Android Background}
+\begin{itemize}
+\item {\bf \emph{Components}}. An Android application consists of four kinds of components, 
+\emph{Activity}, \emph{Service}, \emph{BroadcastReceiver}, and \emph{ContentProvider}.
+Activity components form the basis of the user
+  interface, and each window of the application is typically controlled by
+  an activity. Service components run in the background and remain active even
+  if windows are switched. 
+  %Services can expose interfaces for communication with other applications.
+BroadcastReceiver components react asynchronously to messages
+  from other applications. Finally, ContentProvider components store data relevant to the
+  application, usually in a database, and allow sharing  data across applications.
+
+\item {\bf \emph{Permissions}}. A security \emph{permission} that can be used to 
+put the limitation on the access of some system resources. Typically, an application
+needs specific permissions to access SMS message, contact list, SD card, etc.
+
+\item {\bf \emph{Lifecycle methods}}. A special set of pre-defined methods which is used 
+to manage the lifecycle of Android components. As a user navigates though, pause and switch
+out of current application, different lifecycle methods will be invoked to switch the 
+component to different states. For instance, an application might call \emph{startActivity}
+to start an Activity. When the user switch out to other application and then switch back again,
+\emph{onResume} method will be invoked by the Android system automatically.  
+
+\item {\bf \emph{System APIs and Events}}. Those are two way for an application to communicate
+with the Android system. A typical scenario in Android application is: the programmer will define
+callbacks and add hook them up to some events through listeners. As soon as the event is fired, 
+its corresponding callback method will be invoked by the Android system. For instance, 
+SMS Received notification, Phone calls, etc.
+
+\end{itemize}
+
+\subsection{System Overview}
 % Figure
 \begin{figure}
 \centerline{\includegraphics[scale=0.4]{sysgraph}}
@@ -197,10 +236,28 @@ TICCG to prune the search space; For the second case, we can manully
 modify the temporal formulas based on some domain specific information.
 
 \subsection{Our approach by Example}
+In the section we will briefly illustrate our approach using a simplified 
+version of a malcious application.
+
+Figure~\ref{dropcall} is a malware named "Drop Call". It it a typical 
+eavesdropping malware which records audios silently without interacting with the
+User Interface of the application. If we mark audio record as sensitive data 
+and perform traditional taint analysis in a naive way, we might also 
+exclude a lot of legitimate applications. A typical benigh usage of this 
+application should be: 
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[scale=0.8]{dropped-call.jpg}
+\caption{Drop Call example\label{dropcall}}
+\end{figure}
 
 
 \section{Our Abstraction for Android Application}
 \label{sec:ticcg}
+
+\section{TICCG Construction}
+\label{sec:construct}
 
 \section{Abstract Refinement}
 \label{sec:cegar}
