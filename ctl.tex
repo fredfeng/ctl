@@ -13,14 +13,15 @@
 \maketitle
 
 \begin{abstract}
-Previously, we presented Apposcopy, a new semantics-based approach 
+In our previous work, we presented Apposcopy~\cite{apposcopy}, a new semantics-based approach 
 for identifying a prevalent class of Android malware that steals 
 private user information. However, in practice, we also noticed 
 that several malicious behaviors can only be triggered under a 
-certain sequential system events. To detect such behaviors and make
-an enhancement on our current system, one way is to perform model
-checking on the abstract state machine of a given application.
-But the downside is that the system will take a long time to analyze
+certain sequential system events and our current tool will generate 
+several false positives in those cases. To detect such behaviors, 
+one way is to perform model checking on the abstract state 
+machine of a given Android application.
+But the downside is that the system will take a longer time to analyze
 a single application. 
 
 To detect malware that violate the security policy specified by users 
@@ -42,8 +43,8 @@ As the most popular mobile operating system, the Android platform
 is a growing target for  mobile malware.
 Today, many of the malicious applications that afflict  Android users  exploit
 the private and monetized information
-stored in a user's smartphone. % such as the user's contacts, photos, or
-%account information. 
+stored in a user's smartphone, such as the user's contacts, photos, or
+account information. 
 
 To mitigate the above problems, researchers have been working on either 
 static analysis-based techniques, such as semantic-based approaches and taint analysis, 
@@ -51,27 +52,118 @@ or dynamic analysis based on monitoring the execution traces of a
 given application. However, there are still corpus of malware that is hard to detect 
 by existing technique. According to a recent literature~\cite{pegasus}, there are
 several sophisticated Android malware and their malcious behaviors can only 
-be triggered under a specific event sequences.
+be triggered under a specific event sequences. Such malicious behaviors 
+are difficult to categorize by simply checking whether they are stealing 
+some sensitive informantion. Applications related to audio and video eavedropping 
+belong to this spectrum: The malware will record audio and video information
+without user's notice through a backgroud process. Traditional way to 
+mitigate this problem is to mark both audio and video record as sensitive
+data and perform a sound taint analysis on it. 
+Unfortunately, since many benign apps  also need access to audio and video record 
+to perform their advertised functionality, not every app that
+leaks user information can be classified as malware. We need to figure out
+a way to differentiate the benign and malicious behaviors to reduce false positives.
 
 In response to the  rapid dissemination of 
-Android malware, there is  a real need for tools that can automatically
-detect malicious applications that violate a set of safty properties 
-specified by an auditor.
-
-\subsection{Problem and Approach}
-\subsection{Content and Contributions}
-\subsection{Challenges}
-To the best of our knowledge, there is no previous model checking tools for 
-Android applications which can scale in large applications.
-Pegasus\cite{pegasus} models Android applications as "Permission Event Graph"
+Android malware, one alternative approach is to build an abstract
+model for Android applications and perform model checking with respect
+to the custom specification in the form of temporal formulas. 
+Latest work like Pegasus\cite{pegasus} models Android applications as "Permission Event Graph"
 and checking the safty properties encoded by Java program. While it can 
 differentiate benign applicaton and malicious application through a set 
 of safty properties, it also suffers the performance issue: Most of the 
 applications will take more than 1000 seconds to terminate. 
 
-JAM\cite{cegar12} introduced CEGAR to reduce the runtime overhead of web 
-application in the context of Javascript, which is closed
-to our current work.
+The intuition behind our work is that not only do we need to detect
+the difference between user expectation and malicious intent through the 
+context where system's API and permissions are used during runtime like 
+Pegasus~\cite{pegasus},  we should also apply the technique of  
+counterexample-guided abstraction refinement-based(CEGAR) to reduce 
+the overhead of model checking.
+
+\subsection{Problem and Approach}
+Here we describe the challenges behind our approaches in a bit more detail
+as well as the insights behind our solutions.
+
+{\bf \emph{Problem Definition}}. Here, we consider the following problems
+which are closely related to each other. The first problem is how to design
+a specification language to encode the semantic of the event-driven behaviors 
+of Android System. Pegasus~\cite{pegasus} expresses the specification 
+in terms of Java program and it is not very convenient and compact from the
+perspective of the users; The second problem is how to contruct an abstract
+model for the interaction between an Android application and the Android
+core event system; The last problem is given an abstract model and a specification
+in the form of temporal properties, how do we perform model checking efficiently.
+
+{\bf \emph{Challenges}}. Our specification language should be able to 
+express some custom security policies that monitor the usage of system API and 
+permission in a concise and compact way. For instance, specifying a SMS messge
+can not be sent if user does not press the 'SEND' button. Likewise, 
+a Device ID can not be uploaded to a remote server if a confirmation 
+dialog does not show and confirm by the user.
+
+Even though model checking is a powerful technique for checking the temporal 
+properties of Android application, the interaction between the Android application
+and Android system is very complicated compared to normal Java program: 
+It introduces several event-handler as well as  register-callback mechanisms
+which are invisible to traditional control flow graph; To make thing harder, 
+recent research show that static analysis of event-driven programs turn out 
+to be EXPSPACE-hard~\cite{jhala2007}. So our first challenge is how to model the
+interaction between Android application and Android core event system.
+
+The second challenge is how do we design an abstraction that can reflect the 
+event-driven behavior in Android application concisely. We do not want to 
+model the entire Android system because it will be intractable. Moreover,
+the usage of standard Java API and Android SDK makes the event system more complicated.
+
+Now that we have both an abstract model for the Android application and 
+a specification of the temporal properties, the third challenge is how to 
+perform model checking efficiently. 
+
+{\bf \emph{Insights}}. Our first insight is that even though the Android
+event system is complicated, the total number of events and the number of 
+API that will change the state of the abstract model is finite. Thus it is
+feasible to design a specification language to express the temporal properties
+with respect to some security policies. 
+
+Our second insight is that to come up with an abstract model which reflects
+the interaction between the Android application and the Android core event 
+system, we use a graph to express it explicitly. More specifically, we 
+design TICCG(Temporal Inter-Component Communication Call Graph), which is
+an extension of our previous ICCG(Inter-Component Communication Call Graph)~\cite{apposcopy}.
+More importantly, TICCG abstracts the interactions among the Android event
+system, permissions and API usage in the application but ignore the low
+level details which is irrelevant to our analysis.
+
+Our third insight is to use the technique of the counterexample-guided 
+abstraction refinement-based(CEGAR) to improve the performance of 
+model checking. Recent research like JAM\cite{cegar12} introduces CEGAR 
+to reduce the runtime overhead of web application in the context of 
+Javascript, which is closed to our current work.
+To the best of our knowledge, there is no previous model checking tools for 
+Android applications which can scale in large applications.
+
+\subsection{Content and Contributions}
+The main contributions of this work can be summarized as follows.
+% itemize
+\begin{itemize}
+\item {\bf \emph{TICCG}}, a new abstraction for Android application
+that models the temporal behaviors of system APIs and system events;
+\item {\bf \emph{Encoding benign and malicious intent}}, we provide a specification
+language for user to express the temporal properties of TICCG; 
+\item {\bf \emph{TICCG Construction and Analysis}}, we construct TICCG by combining 
+traditionl static analyses technique(Pointer analysis, Call Graph construction, taint analysis, etc)
+with the semantic of Android API, permission and event system. Then we implement
+model checking on TICCG with respect to the specification;
+\item {\bf \emph{CEGAR-based refinement}}, We apply the counterexample-guided 
+abstraction refinement-based(CEGAR) technique in Android application 
+and use it to improve the performance of the system dramatically.
+\item {\bf \emph{Experiments}}, We run our tool on both some benign applications and 
+malware to verify that our system can identify malicious behaviors precisely.
+\end{itemize}
+
+The paper is structured as follows: We first provide some background knowledge of
+Android framework and illustrate our technique by a simple example in Section~\ref{sec:overview}
 
 \section{Background and Overview}
 \label{sec:overview}
@@ -106,32 +198,19 @@ modify the temporal formulas based on some domain specific information.
 
 \subsection{Our approach by Example}
 
-\subsection{Contributions}
-The main contributions of this work can be summarized as follows.
-% itemize
-\begin{itemize}
-\item We apply model checking to verify whether a given applicatino violates
-a set of pre-defined safty policies and make it scale in real world 
-applications;
-\item We come up with TICCG, a new abstraction for Android application
-that models the temporal behaviors of system APIs and system events;
-\item We apply the counterexample-guided abstraction refinement-based(CEGAR) 
-technique in Android application and use it to improve the performance 
-of the system dramatically.
-\end{itemize}
-
 
 \section{Our Abstraction for Android Application}
+\label{sec:ticcg}
 
 \section{Abstract Refinement}
+\label{sec:cegar}
+
+\section{Evaluation}
+\label{sec:eval}
 
 \section{Conclusion}
+\label{sec:conclude}
 
-Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor
-incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
-nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-fugiat nulla pariatur.
 % Bibliography
 %\bibliographystyle{ACM-Reference-Format-Journals}
 %\bibliography{mybib}
