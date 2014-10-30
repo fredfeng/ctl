@@ -239,12 +239,24 @@ modify the temporal formulas based on some domain specific information.
 In the section we will briefly illustrate our approach using a simplified 
 version of a malcious application.
 
-Figure~\ref{dropcall} is a malware named "Drop Call". It it a typical 
+Figure~\ref{dropcall} is a malware named "Drop Call" which is similar to
+the example in Pegasus~\cite{pegasus}. It it a typical 
 eavesdropping malware which records audios silently without interacting with the
 User Interface of the application. If we mark audio record as sensitive data 
 and perform traditional taint analysis in a naive way, we might also 
 exclude a lot of legitimate applications. A typical benigh usage of this 
-application should be: 
+application should obey the following temporal properties: 
+\begin{itemize}
+\item {\bf \emph{Do not start recording util user clicks the 'Start' button}}. 
+\item {\bf \emph{Do not start recording if user pressst the 'Stop' button}}. 
+\end{itemize}
+The above properties are the key to differentiate whether an application is 
+benign or malcious under current context(audio recording). Moving forward,
+we could formalize them in term of a logical formula:
+\[
+(\neg StartRecord \cup StartOnclick)    
+\land (StopRecord \iff StopOnclick)    
+\]
 
 \begin{figure}[ht!]
 \centering
@@ -252,21 +264,63 @@ application should be:
 \caption{Drop Call example\label{dropcall}}
 \end{figure}
 
+We encode the benign user intent in the form of temporal formulas similar to 
+above example and conclude that an application is very likely to be 
+malicious if it violates the proterties during runtime. However, since we 
+over-apprximate the behaviors of Android applications, it is possible that 
+our system reports a false positive. In this case, we will generate a 
+counterexample in the form of a sequence of execution states and let the auditor
+to decide whether it is a false positive or a true violation. If it is a false
+positive, we will use this counterexample to refine our search space thus
+performing model checking efficiently.
 
-\section{Our Abstraction for Android Application}
+Now we have the temporal property for the example application, the next 
+challenge problem is, how do we design an abstraction for this 'Drop Call' 
+application and perform model checking on it. Our abstraction should be large
+enough to avoid too much false positives yet concise and compact enough 
+to make the computation tractable.
+
+
+{\bf \emph{Temporal Inter-Component Communication Call Graph}}. Even though
+the total number of APIs in Android applications and Android framework is large,
+the number of Android system APIs that modify the application states and 
+interact with the permission system is much smaller. Inspired by Pegasus~\cite{pegasus} 
+and another recent work~\cite{aware14}, we design the Temporal Inter-Component
+ Communication Call Graph(TICCG), a new abstraction for 
+Android applications as an extension of our previous work~\cite{apposcopy}.
+More specifically, in TICCG, each node represents a state under certain
+event context and each edge denotes certain callback methods will be invoked 
+on that specific context. We also attach the semantic of system APIs 
+as well as their corresponding permissions to the edge to categorize 
+the transition precisely. We will describe the construction algorithm for 
+TICCG in a bit more detail in Section~\ref{sec:ticcg} 
+
+Once we finish constructing the TICCG for the example, the original temporal
+properties can be viewed as queries on the properties of TICCG and we answer those
+queries through model checking.  
+
+\section{Our Abstraction for Android Applications}
 \label{sec:ticcg}
+In this section, we will formalize the definition of TICCG, which is our abstraction
+for Android applications.
 
 \section{TICCG Construction}
 \label{sec:construct}
+In this section, we will describe the algorithm to contruct the TICCG.
 
 \section{Abstract Refinement}
 \label{sec:cegar}
+In this section, we will describe the algorithm to perform model checking efficiently
+by applying CEGAR.
 
 \section{Evaluation}
 \label{sec:eval}
+In this section, we will show some preliminary result of our tool on both benign
+applications and malware. 
 
 \section{Conclusion}
 \label{sec:conclude}
+
 
 % Bibliography
 %\bibliographystyle{ACM-Reference-Format-Journals}
