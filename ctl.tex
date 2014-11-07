@@ -4,6 +4,14 @@
 %\documentclass{acta}
 
 \usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{pifont}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}{Example}
+\newcommand*{\leadstostar}{\leadsto\hspace{-.14cm}\star\ }
+
 
 \begin{document}
 
@@ -301,12 +309,162 @@ queries through model checking.
 
 \section{Our Abstraction for Android Applications}
 \label{sec:ticcg}
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=10cm,height=6cm,keepaspectratio]{state.pdf}
+\caption{TICCG for the running exampl\label{state}}
+\end{figure}
+
 In this section, we will formalize the definition of TICCG, which is our abstraction
-for Android applications.
+for Android applications. We also briefly introduce the malware specification language
+that is going to be used to encode the temporal properties.
+
+\subsection{Definition of TICCG}
+\begin{definition}
+\vspace{-0.05in}
+The Temporal Inter-Component Call Graph(TICCG) over a set of events and system APIs
+is represented formally by a 4-tuple $(q_0,S,\tau,\pi)$, where:
+\begin{itemize}
+\item $q_0$ is a set of initial states;
+\item $S$ is a set of abstract states which represent a set of runtime states;
+\item $tau$ is a normal transition starting from current state $P$ and when an event
+$e$ fires and its corresponding callback method $cb_1$ is invoked, the system will switch
+to a new state $Q$;
+\item $pi$ is an asynchronous transition from current state $P$ to a new state $Q$
+labeled with a life-cycle method $m_1$.
+\end{itemize}
+\vspace{-0.05in}
+\end{definition}
+
+\begin{definition} 
+\label{def:leadsto}
+\vspace{-0.05in}
+We write $m_1 \leadsto m_2$ iff method $m_1$ directly calls 
+$m_2$ in some execution of the program. We define $\leadstostar$ to be the reflexive 
+transitive closure of  $\leadsto$.
+\vspace{-0.05in}
+\end{definition} 
+
+
+Figure~\ref{state} shows a partial TICCG for previous running example. Here, a dash line denotes
+an asynchronous transition while a solid line represents a normal transition. The upper part of 
+the figure means there is a asynchronous transition from $S_1$ to $S_2$ when the life-cycle method \verb+onResume()+ is invoked by the Android system; The lower part of the figure means if the application is currently in state $S_3$, after the \verb+Button.Onclick+ event is fired and its 
+corresponding callback method \verb+onClick()+ is invoked, the application will switch to 
+a new runtime state $S_4$.
+
+Observe that TICCG is different from either Call graph or Control Flow Graph.
+A Call Graph denotes the call relations among methods in the system while TICCG only concerns
+about the methods that belong to the Android system; A Control Flow Graph represents the control
+dependency among statements in a method whereas TICCG labels callback methods or system methods
+that change the runtime states of the system. Intuitively, TICCG is a high-level abstraction
+for the runtime states transition of the Android application.
+
+\subsection{Malware Specification Language}
+This section describes our malware signature language, which is a Datalog program augmented with 
+built-in predicates. The user may also define 
+additional helper predicates  used in encoding the temporal properties.
+In what follows, we first give some background on Datalog, and then describe the 
+ the syntax and semantics of our built-in predicates.
+
+
+{\bf \emph{Datalog Preliminaries}}. 
+A Datalog program  consists of a set of \emph{rules} and a set of \emph{facts}. 
+Facts simply declare predicates that evaluate to true. For example, 
+{\tt parent("Bill", "Mary")} states that Bill is a parent of Mary. Each  Datalog rule is  a Horn clause defining a predicate as a conjunction of other
+predicates. For example, the  rule:
+
+\begin{verbatim}
+ancestor(x, y) :- parent(x, z), ancestor(z, y).
+\end{verbatim}
+\normalsize
+
+\noindent
+says that \verb+ancestor(x, y)+ is true if both \verb+parent(x, z)+ and
+\verb+ancestor(z, y)+ are true. In addition to variables, predicates can 
+also contain constants, 
+which are surrounded by double quotes, or
+``don't cares",  denoted by underscores.
+
+Datalog predicates naturally represent relations. Specifically, if tuple $(x, y, z)$
+is in relation $A$, this means the  predicate $A(x, y, z)$ is
+true. In what follows, we write the type of a relation $R \subseteq X \times Y \times \ldots$ as $(s_1 : X, s_2 : Y, \ldots)$, where
+$s1$, $s2$, $\ldots$ are descriptive texts for the corresponding domains.
+
+Coming back to our system, the following code snippet is being used to implement the temporal
+property in our previous motivation example for "Drop-Call".
+
+\begin{verbatim}
+function checkValidity(e)
+    return function(e)
+        if e="start"
+            return true
+        if e="stop"
+            return false
+        end
+end
+datalog.add_iter_prim("checkValidity")
+\end{verbatim}
+\normalsize
+
+TBD.
+
 
 \section{TICCG Construction}
 \label{sec:construct}
-In this section, we will describe the algorithm to contruct the TICCG.
+In this section, we will describe the algorithm to contruct the TICCG. 
+
+{\bf \emph{Pointer analysis and Callgraph Construction}}. In order to build the temporal inter-component callgraph and track information flow, our system starts by performing a pointer analysis, 
+which computes the set of abstract heap objects that each variable may point to. In the remainder of the paper, we use the notation 
+ $v \hookrightarrow o$ to denote  that 
+variable $v$ may point to an abstract heap object  represented by  $o$ in some execution of the program. 
+
+
+
+Since the precision of the underlying pointer analysis  is critical for detecting malware with few false alarms, 
+we use a field- and context-sensitive Andersen-style pointer analysis~\cite{andersen}. For context-sensitivity, we use a hybrid approach
+that combines call-site sensitivity~\cite{kcfa} and object-sensitivity~\cite{MilanovaRR05}. 
+In particular, our approach is  similar to the technique described in~\cite{hybrid-context} and uses
+call-site sensitivity for static method calls and object-sensitivity for virtual method calls. 
+
+Another key ingredient of our  malware detection algorithm is callgraph construction, which is used for resolving the 
+targets of virtual method calls. Since callgraph precision  has significant impact on the precision of the TICCG, 
+our system computes the callgraph on-the-fly, simultaneously refining the targets of virtual method calls and points-to sets  until a fixed point is reached. The set of edges in the resulting callgraph represent the relation $\leadsto$ from
+Definition~\ref{def:leadsto}. An edge in the callgraph from method $m_1$
+to  method $m_2$ corresponds to $m_1 \leadsto m_2$.
+Similarly, $m_1 \leadsto m_2$
+represents that there exists a path in the callgraph from 
+$m_1$ to  $m_2$.
+
+
+{\bf \emph{Event Context Extraction}}. 
+The goal of event context extraction is to generate the precondition for the handler to execute given the name of the event handler as the input. For instance, an event handler named \verb+Button.onClick+ will eventually invoke the \verb+onClick()+ callback in the application. More specifically, we use previous points-to information to keep tracking the actual argument of listener methods that build connections between events and their corresponding callback methods. In figure~\ref{onclick}, based on the points-to information, we infer that   
+the user declares a customized callback method(\verb+onClick()+) and hooks it up with a button labeled with \verb+'clickMe'+ through the system API \verb+setOnclickListener+. If we use a naive or imprecise pointer analysis, it will conclude that every callback method will be hook up with every event named \verb+'onClick'+ thus generate a lot of false positives. 
+\begin{figure}[!t]
+\begin{center}
+{ 
+\begin{verbatim}
+1.Button btn = (Button)findViewById("clickMe");
+2.// Register the onClick listener with the implementation above
+3.buttonX.setOnClickListener(new OnClickListener() {
+4.    public void onClick(View v)
+5.    {
+6.        sendSMS();
+7.    } 
+8.});
+\end{verbatim}
+}
+\end{center}
+\caption{Code Snippet for event registration.}
+\label{fig:onclick}
+\end{figure}
+
+
+{\bf \emph{System APIs Semantic Analysis}}. 
+The goal of the system APIs semantic analysis is the following: given the precondition as well as the name of a event handler as an input, generate the postcondition for which the method is going to be invoked. For instance, the handler named \verb+onResume+ will invoke the \verb+onResume()+ method in $android.app.Activity$ class. 
+During implementation, we do not analyze the source codes of Android APIs but writing models based on manually checking their semantic. Our system's static analyses use manually-written models of the Android framework; currently, we have models for about
+1,100 classes that are relevant for our analyses.
+
 
 \section{Abstract Refinement}
 \label{sec:cegar}
