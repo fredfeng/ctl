@@ -6,6 +6,7 @@
 \usepackage{graphicx}
 \usepackage{amssymb}
 \usepackage{pifont}
+\usepackage[ruled, vlined]{algorithm2e}
 
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{definition}[theorem]{Definition}
@@ -407,7 +408,25 @@ datalog.add_iter_prim("checkValidity")
 \end{verbatim}
 \normalsize
 
-TBD.
+Here, the goal of function $checkValidify(e)$ is given a specific event, return $true$
+if the argument is a "start" event and return $false$ otherwise. The last statement is to
+add current procedure to the datalog database as a public API. 
+
+However, it will be quite tedious if the auditor has to write such kind of 
+program for each temporal property. To mitigate this problem, we automatically map
+all system APIs to a set of their corresponding permissions based on previous result of
+PScout~\cite{pscout}. Finally we generate the codes for checking the temporal properties 
+based on the mapping.  
+
+Similar to our previous work in Apposcopy~\cite{apposcopy}, TICCG also provides some 
+build-in predicates to capture the semantic of Android application:
+\begin{itemize}
+\item {\bf \emph{flow predicate}}, specifying the data-flow properties such as whether 
+there is a flow from the device Id to Internet;
+\item {\bf \emph{ICC predicate}}, specifying the control-flow properties such as
+whether an Activity $A$ could launch a service $B$.
+\end{itemize}
+
 
 
 \section{TICCG Construction}
@@ -471,13 +490,151 @@ During implementation, we do not analyze the source codes of Android APIs but wr
 In this section, we will describe the algorithm to perform model checking efficiently
 by applying CEGAR.
 
+Algorithm~\ref{alg:abs} shows the key idea for performing model checking on a given program $P$
+ with respect to a set of temporal properties $\Phi$. The algorithm takes a program $P$, a set of temporal formulas$\Phi$, a finite set of predicates and a bound $k$ to restrict the maximum 
+ number of predicates in the formulas. The algorithm begins with modeling a sound abstraction for Program $P$. In current context, the abstraction denotes the symbolic representation of TICCG.
+ 
+ The algorithm first searchs for a path from initial state to final states which violate the 
+ given temporal properties. If it eventually finds such a path($\pi$), its next step is to
+whether $\pi$ is an actual violation or false positive. If it's an actuall violation, then our system will report a violation with this counterexample; If it's a false positive, then our system
+needs to perform abstract refinement on current predicates set until (i). The actuall violation is exposed; (ii) The size of predicates reaches the bound($k$).  
+
+More specifically, if the counterexample $\pi$ is not an actual violation with respect to 
+the given temporal properties and it has a size of predicates less than $k$, the algorithm will 
+refine current predicates set $E$ by learning new predicates by function $getNewProdicate(\pi)$
+ from current counterexample. Otherwise, a violation will be reported.
+
+Next we will go through some key procedures step by step:
+
+{\bf \emph{Abstraction ($abstract(P)$)}}. Given a set of predicates $E$ and an Android program
+$P$, the goal of function $abstract(P)$ is to produce $P_A$, which is the symbolic version of
+$P$ with equivalent semantic. Based on previous introduction, $P_A$ is actuall an automaton 
+corresponding to TICCG.
+
+{\bf \emph{Reachability Checking ($getReachable(P,E)$)}}. Given the abstract version of TICCG 
+for the Android program $P$ and predicates $E$, the goal of $getReachable(P,E)$ is to search
+all the possible pathes that violate the temporal properties $\Phi$. Since we also represent 
+the temporal properties $\Phi$ with automatons $G_{\Phi}$, the reachability checking problem can reduce to verifying whether the intersection between $G_{\Phi}$ and $P_A$, if it is not empty,
+a counterexample corresponds to the trace($\pi$) will be reported.
+
+{\bf \emph{Validity Checking ($isValid(\pi)$)}}. The procedure for validity checking is to 
+verify whether the counterexample $\pi$ is an actual path in through program $P$. This is 
+a common problem which had been solved by most model checkers~\cite{slam,lazy02}. The key idea is to construct 
+a formula $F$ with the property that $\pi$ is an actual path if and only if $F$ is valid.
+
+{\bf \emph{Abstract Refinement ($getNewPredicate(\pi)$)}}. Since our $P_A$ will always be
+ an over-approximation to the actual program $P$, given a counterexample $\pi$,  there could 
+exist two cases: (i). The formula $F$ corresponding to $\pi$ is valid and $\pi$ is indeed a 
+violation; (ii). $F$ is invalid, which means that we can not conclude that $\pi$ is the actual 
+violation. In this case, if the algorithm has not reach the bound $k$, it will invoke 
+$getNewPredicate(\pi)$ to add new predicates $E_A$ to current predicates set. In our implementation we use interpolation~\cite{mcmillan05} to compute $E_A$.
+
+{\bf \emph{Violation witness $\Upsilon$}}. 
+In many cases, even though our tool detects the violation statically, the human auditors 
+still want to construct the specific input to reproduce the violation so as to double confirm
+that it is indeed a violation. In our system we implement violation witness to achieve this
+goal. The term \emph{violation witness} is inspired from a recent work~\cite{cegar12}. 
+It is a sequnce of statements $\Upsilon^{\Phi}_{\pi}$ in current program $P$ with respect to the counterexample $\pi$ and temporal properties $\Phi$. We do not discuss the detail computaion for  
+$\Upsilon^{\Phi}_{\pi}$ here, but the intuition is given a counterexample $\phi$ as well as
+the temporal properties $\Phi$, there must exit a sequence of statments $s_0, s_1, ..., s_n$
+from initial state to final state.
+
+{\bf \emph{Termination}}. 
+Our algorithm is guaranteed to terminate because of those two properties: (i). It performs a
+ bounded model checking with respect to a maximum number of $k$ predicates; (ii). In the worst
+ case, it will report violation for every statment, which is also a finite set.
+
+
+\begin{algorithm}[!t]
+\label{fig:alg}
+\SetAlgoLined
+\SetKwInOut{Input}{Input}
+\SetKwInOut{Output}{Output}
+\Input{Current Program $P$,  maximum number of predicates $k$, 
+    a set of temporal properties$\Phi$, predicates set $E$}
+\Output{A set of counterexamples which violates the given temporal properties.}
+\Repeat{forever}{
+    $P_{A} \leftarrow$ $Abstract(P,E)$\\
+    $\pi \leftarrow$ $getReachable(P,E)$
+
+    \uIf{$\pi == null$} {
+        return
+    }
+    \uElseIf{$isValid(\pi)$} {
+        report properties violation.\\
+        $report(\pi, \Phi)$\\
+        return
+    }
+    \Else{
+    //Refine current abstraction with bounded model checking through a maximum number of k predicates.\\
+        \uIf{$|E| < k$}{
+            $E \leftarrow$ $E\cup getNewPrdicate(\pi)$
+        } 
+        \Else{
+            //reach the limit of k. report anyway.\\
+            report properties violation\\
+            $report(\pi, \Phi)$\\
+            return
+        }
+
+    }
+}
+\caption{Abstract refinement with respect to temporal properties}\label{alg:abs}
+\end{algorithm}
+
+
 \section{Evaluation}
 \label{sec:eval}
 In this section, we will show some preliminary result of our tool on both benign
-applications and malware. 
+applications and malware. Since we do not have enough time to finish all the implementation of 
+this course project as well as the experiments before the deadline, 
+I am going to briefly outline the design of our experiments.
+
+Basically we want to perform an apple-to-apple comparison with Pegasus~\cite{pegasus}.
+In Pegasus'~\cite{pegasus} paper, the authors ran  it on 152 malicious and 117 benign 
+Android applications from Google Play. More specifically, they performed both
+Generic Specification checking and Application-Specific Properties checking separately.
+Here, we are very interested in the results of Generic Specification checking on our
+tool, because such kinds of checkings could be fully automatic and Pegasus~\cite{pegasus}
+yielded very bad performance in this experiment: It took an average of 2 hours in
+abstraction phase and 1000 seconds for model checking. By applying CEGAR, we expect that
+there will be a significant improvement in terms of the performance in model checking.
+Since our TICCG only captures the high-level semantic of Android applications, we also
+expect an improvement of performance in the abstraction phase. 
+
+On the other hand, we also concern about the precision of TICCG over Pegasus. More 
+specifically, we are going to evaluate the precision in two aspects:  
+\begin{itemize}
+\item In Pegasus' original test suites, TICCG should get better or same precision as 
+Pegasus;
+
+\item We also need to include more applications to demonstrate that TICCG yields 
+better precision since it has richer semantic for Android applications.
+\end{itemize}
+
+We mark the evaluation section as future work.
+
 
 \section{Conclusion}
 \label{sec:conclude}
+This is a blueprint version of the conclusion since we have not finished current work yet.
+
+\begin{itemize}
+\item We come up with {\bf \emph{TICCG}}, a new abstraction for Android application
+that models the temporal behaviors of system APIs and system events. Since TICCG focuses
+on high-level semantic of Android applications, our abstraction for Android application
+is pretty compact;
+\item {\bf \emph{Encoding benign and malicious intent}}, we provide a specification
+language for user to express the temporal properties of TICCG; 
+\item {\bf \emph{TICCG Construction and Analysis}}, we construct TICCG by combining 
+traditionl static analyses technique(Pointer analysis, Call Graph construction, taint analysis, etc)
+with the semantic of Android API, permission and event system. Then we implemen
+model checking on TICCG with respect to the specification;
+\item {\bf \emph{CEGAR-based refinement}}, our work is the first to apply the counterexample-guided abstraction refinement-based(CEGAR) technique in Android application 
+and use it to tackle the performance issue. 
+\item {\bf \emph{Experiments}}, We run our tool on both benign applications and 
+malware and compare them with Pegasus. The result shows that our system can identify malicious behaviors precisely with less overhead.
+\end{itemize}
 
 
 % Bibliography
